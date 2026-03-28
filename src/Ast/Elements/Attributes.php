@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Forte\Ast\Elements;
 
+use ArrayAccess;
+use ArrayIterator;
+use Closure;
+use Countable;
 use Forte\Ast\DirectiveBlockNode;
 use Forte\Ast\DirectiveNode;
 use Forte\Ast\Document\Document;
@@ -15,14 +19,18 @@ use Forte\Ast\PhpTagNode;
 use Forte\Parser\NodeKind;
 use Forte\Parser\TreeBuilder;
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
+use IteratorAggregate;
+use OutOfBoundsException;
 use Traversable;
 
 /**
  * @phpstan-import-type FlatNode from TreeBuilder
  *
- * @extends Collection<int, Attribute>
+ * @implements IteratorAggregate<int, Attribute>
+ * @implements ArrayAccess<int, Attribute>
  */
-class Attributes extends Collection
+class Attributes implements ArrayAccess, Countable, IteratorAggregate
 {
     private ?Document $document = null;
 
@@ -35,6 +43,9 @@ class Attributes extends Collection
 
     private bool $loaded = false;
 
+    /** @var array<int, Attribute> */
+    private array $items = [];
+
     /**
      * @param  Document|iterable<int, Attribute>  $items
      */
@@ -43,12 +54,13 @@ class Attributes extends Collection
         if ($items instanceof Document) {
             $this->document = $items;
             $this->elementIndex = $elementIndex;
-            parent::__construct([]);
-        } else {
-            /** @var iterable<int, Attribute> $items */
-            parent::__construct($items);
-            $this->loaded = true;
+
+            return;
         }
+
+        $this->loaded = true;
+        $this->items = $this->normalizeItems($items);
+        $this->buildNameIndex();
     }
 
     /**
@@ -60,24 +72,31 @@ class Attributes extends Collection
     {
         $this->ensureLoaded();
 
-        return array_values($this->items);
+        return $this->items;
     }
 
     /**
-     * Get an attribute by name..
+     * Get an attribute by name or position.
+     *
+     * @template TDefault
      *
      * @param  string|int  $key
-     * @param  mixed  $default
+     * @param  TDefault|Closure(): TDefault  $default
+     * @return Attribute|TDefault
      */
-    public function get($key, $default = null): mixed
+    public function get(mixed $key, mixed $default = null): mixed
     {
         $this->ensureLoaded();
 
         if (is_string($key)) {
-            return $this->byName[strtolower($key)] ?? $default;
+            return $this->byName[strtolower($key)] ?? self::resolveDefault($default);
         }
 
-        return parent::get($key, $default);
+        if (is_int($key) && array_key_exists($key, $this->items)) {
+            return $this->items[$key];
+        }
+
+        return self::resolveDefault($default);
     }
 
     /**
@@ -85,7 +104,7 @@ class Attributes extends Collection
      *
      * @param  string|int  $key
      */
-    public function has($key): bool
+    public function has(mixed $key): bool
     {
         $this->ensureLoaded();
 
@@ -93,7 +112,80 @@ class Attributes extends Collection
             return isset($this->byName[strtolower($key)]);
         }
 
-        return parent::has($key);
+        return is_int($key) && array_key_exists($key, $this->items);
+    }
+
+    /**
+     * Get the first attribute, optionally matching a callback.
+     *
+     * @template TDefault
+     *
+     * @param  (callable(Attribute, int): bool)|null  $callback
+     * @param  TDefault|Closure(): TDefault  $default
+     * @return Attribute|TDefault
+     */
+    public function first(?callable $callback = null, mixed $default = null): mixed
+    {
+        return $this->toCollection()->first($callback, $default);
+    }
+
+    /**
+     * Get the last attribute, optionally matching a callback.
+     *
+     * @template TDefault
+     *
+     * @param  (callable(Attribute, int): bool)|null  $callback
+     * @param  TDefault|Closure(): TDefault  $default
+     * @return Attribute|TDefault
+     */
+    public function last(?callable $callback = null, mixed $default = null): mixed
+    {
+        return $this->toCollection()->last($callback, $default);
+    }
+
+    /**
+     * Map attributes into a base collection.
+     *
+     * @template TMapped
+     *
+     * @param  callable(Attribute, int): TMapped  $callback
+     * @return Collection<int, TMapped>
+     */
+    public function map(callable $callback): Collection
+    {
+        return $this->toCollection()->map($callback);
+    }
+
+    /**
+     * Filter attributes into a new lazy-safe attributes bag.
+     *
+     * @param  (callable(Attribute, int): bool)|null  $callback
+     */
+    public function filter(?callable $callback = null): static
+    {
+        return $this->newFromItems(
+            $this->toCollection()->filter($callback)->values()->all()
+        );
+    }
+
+    /**
+     * Return the attributes as a dense ordered bag.
+     */
+    public function values(): static
+    {
+        return $this->newFromItems($this->toCollection()->values()->all());
+    }
+
+    /**
+     * Convert attributes to a detached base collection snapshot.
+     *
+     * @return Collection<int, Attribute>
+     */
+    public function toCollection(): Collection
+    {
+        $this->ensureLoaded();
+
+        return new Collection($this->items);
     }
 
     /**
@@ -103,7 +195,7 @@ class Attributes extends Collection
     {
         $this->ensureLoaded();
 
-        return parent::count();
+        return count($this->items);
     }
 
     /**
@@ -121,7 +213,68 @@ class Attributes extends Collection
     {
         $this->ensureLoaded();
 
-        return parent::getIterator();
+        return new ArrayIterator($this->items);
+    }
+
+    public function offsetExists(mixed $offset): bool
+    {
+        $this->ensureLoaded();
+
+        return is_int($offset) && array_key_exists($offset, $this->items);
+    }
+
+    public function offsetGet(mixed $offset): mixed
+    {
+        $this->ensureLoaded();
+
+        if (! is_int($offset)) {
+            return null;
+        }
+
+        return $this->items[$offset] ?? null;
+    }
+
+    public function offsetSet(mixed $offset, mixed $value): void
+    {
+        $this->ensureLoaded();
+
+        $attribute = $this->assertAttribute($value);
+
+        if ($offset === null) {
+            $this->items[] = $attribute;
+        } else {
+            if (! is_int($offset)) {
+                throw new InvalidArgumentException('Attributes array access only supports integer positions. Use get(), has(), or find() for name-based lookups.');
+            }
+
+            if (! array_key_exists($offset, $this->items)) {
+                throw new OutOfBoundsException("Attribute offset {$offset} does not exist.");
+            }
+
+            $this->items[$offset] = $attribute;
+        }
+
+        $this->detachFromSource();
+        $this->buildNameIndex();
+    }
+
+    public function offsetUnset(mixed $offset): void
+    {
+        $this->ensureLoaded();
+
+        if (! is_int($offset)) {
+            return;
+        }
+
+        if (! array_key_exists($offset, $this->items)) {
+            return;
+        }
+
+        unset($this->items[$offset]);
+        $this->items = array_values($this->items);
+
+        $this->detachFromSource();
+        $this->buildNameIndex();
     }
 
     /**
@@ -129,9 +282,7 @@ class Attributes extends Collection
      */
     public function hasBladeConstruct(): bool
     {
-        $this->ensureLoaded();
-
-        return $this->contains(fn (Attribute $attr) => $attr->isBladeConstruct());
+        return $this->toCollection()->contains(fn (Attribute $attr) => $attr->isBladeConstruct());
     }
 
     /**
@@ -139,9 +290,7 @@ class Attributes extends Collection
      */
     public function hasExpression(): bool
     {
-        $this->ensureLoaded();
-
-        return $this->contains(fn (Attribute $attr) => $attr->isExpression());
+        return $this->toCollection()->contains(fn (Attribute $attr) => $attr->isExpression());
     }
 
     /**
@@ -432,6 +581,7 @@ class Attributes extends Collection
         }
 
         $this->loaded = true;
+        $this->items = [];
         $this->byName = [];
 
         if ($this->document === null || $this->elementIndex === null) {
@@ -502,6 +652,73 @@ class Attributes extends Collection
         if ($lastWhitespaceIdx !== -1) {
             $this->trailingWhitespaceIdx = $lastWhitespaceIdx;
         }
+    }
+
+    private function buildNameIndex(): void
+    {
+        $this->byName = [];
+
+        foreach ($this->items as $attribute) {
+            if ($attribute->isBladeConstruct()) {
+                continue;
+            }
+
+            $name = $attribute->nameText();
+
+            if ($name !== '') {
+                $this->byName[strtolower($name)] = $attribute;
+            }
+        }
+    }
+
+    /**
+     * @param  iterable<int, Attribute>  $items
+     */
+    private function newFromItems(iterable $items): static
+    {
+        $attributes = clone $this;
+        $attributes->items = $this->normalizeItems($items);
+        $attributes->loaded = true;
+        $attributes->detachFromSource();
+        $attributes->buildNameIndex();
+
+        return $attributes;
+    }
+
+    private function detachFromSource(): void
+    {
+        $this->document = null;
+        $this->elementIndex = null;
+        $this->trailingWhitespaceIdx = -1;
+    }
+
+    /**
+     * @param  iterable<int, Attribute>  $items
+     * @return array<int, Attribute>
+     */
+    private function normalizeItems(iterable $items): array
+    {
+        $normalized = [];
+
+        foreach ($items as $item) {
+            $normalized[] = $this->assertAttribute($item);
+        }
+
+        return $normalized;
+    }
+
+    private function assertAttribute(mixed $value): Attribute
+    {
+        if (! $value instanceof Attribute) {
+            throw new InvalidArgumentException('Attributes only accept Attribute instances.');
+        }
+
+        return $value;
+    }
+
+    private static function resolveDefault(mixed $default): mixed
+    {
+        return $default instanceof Closure ? $default() : $default;
     }
 
     private function isStandaloneAttributeKind(int $kind): bool

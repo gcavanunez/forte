@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+use Forte\Ast\Elements\Attribute;
+use Forte\Ast\Elements\Attributes;
+use Illuminate\Support\Collection;
+
 describe('Attributes Collection Methods', function (): void {
     describe('find()', function (): void {
         it('finds attribute by name', function (): void {
@@ -91,6 +95,65 @@ describe('Attributes Collection Methods', function (): void {
 
             $filtered = $el->attributes()->onlyNames(['nonexistent']);
             expect($filtered)->toHaveCount(0);
+        });
+    });
+
+    describe('collection boundary', function (): void {
+        it('map() returns a base collection', function (): void {
+            $el = $this->parseElement('<div class="foo" id="bar"></div>');
+
+            $mapped = $el->attributes()->map(fn (Attribute $attribute): string => $attribute->nameText());
+
+            expect($mapped)->toBeInstanceOf(Collection::class)
+                ->and($mapped->all())->toBe(['class', 'id']);
+        });
+
+        it('filter() returns Attributes and keeps dense ordering', function (): void {
+            $el = $this->parseElement('<div class="foo" id="bar"></div>');
+
+            $filtered = $el->attributes()->filter(
+                fn (Attribute $attribute): bool => $attribute->nameText() !== 'class'
+            );
+
+            expect($filtered)->toBeInstanceOf(Attributes::class)
+                ->and($filtered)->toHaveCount(1)
+                ->and($filtered->all()[0]->nameText())->toBe('id');
+        });
+
+        it('toCollection() supports generic collection operations', function (): void {
+            $el = $this->parseElement('<div id="bar" class="foo"></div>');
+
+            $names = $el->attributes()
+                ->toCollection()
+                ->sortBy(fn (Attribute $attribute): string => $attribute->nameText())
+                ->values()
+                ->map(fn (Attribute $attribute): string => $attribute->nameText())
+                ->all();
+
+            expect($names)->toBe(['class', 'id']);
+        });
+    });
+
+    describe('array access mutations', function (): void {
+        it('supports append and replace by position', function (): void {
+            $attrs = $this->parseElement('<div class="foo" id="bar"></div>')->attributes();
+            $replacement = $this->parseElement('<div data-test="x"></div>')->attributes()->first();
+            $appended = $this->parseElement('<div title="baz"></div>')->attributes()->first();
+
+            $attrs[0] = $replacement;
+            $attrs[] = $appended;
+
+            expect($attrs)->toHaveCount(3)
+                ->and($attrs->has('class'))->toBeFalse()
+                ->and($attrs->has('data-test'))->toBeTrue()
+                ->and($attrs->find('title'))->toBe($appended)
+                ->and($attrs[0]?->nameText())->toBe('data-test');
+        });
+
+        it('rejects non-attribute values', function (): void {
+            $attrs = $this->parseElement('<div class="foo"></div>')->attributes();
+
+            expect(fn () => $attrs[] = 'invalid')->toThrow(\InvalidArgumentException::class);
         });
     });
 });
