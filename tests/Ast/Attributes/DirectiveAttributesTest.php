@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Forte\Ast\DirectiveBlockNode;
+use Forte\Ast\DirectiveNode;
 use Forte\Ast\Document\Document;
 use Forte\Ast\Elements\ElementNode;
 use Forte\Parser\ParserOptions;
@@ -101,6 +102,43 @@ BLADE;
         $switchBlock = $blockDirectives[0]->asDirectiveBlock();
         expect($switchBlock)->toBeInstanceOf(DirectiveBlockNode::class)
             ->and($switchBlock->nameText())->toBe('switch')
+            ->and($doc->render())->toBe($blade);
+    });
+
+    test('@class directive in attribute position is parsed as DirectiveNode', function (): void {
+        $blade = '<x-alert @class(["active"]) />';
+
+        $doc = $this->parse($blade);
+        $components = $doc->getComponents();
+
+        expect($components)->toHaveCount(1);
+
+        $component = $components->first();
+        $directives = $component->attributes()->directives()->getBladeConstructs()->all();
+
+        expect($directives)->toHaveCount(1);
+
+        $directive = $directives[0]->asDirective();
+        expect($directive)->toBeInstanceOf(DirectiveNode::class)
+            ->and($directive->nameText())->toBe('class')
+            ->and($directive->arguments())->toBe('(["active"])')
+            ->and($directive->whitespaceBetweenNameAndArgs())->toBeNull()
+            ->and($doc->render())->toBe($blade);
+    });
+
+    test('@class with multiple spaces before arguments captures all whitespace', function (): void {
+        $blade = '<x-alert @class  (["active"]) />';
+
+        $doc = $this->parse($blade);
+        $component = $doc->getComponents()->first();
+        $directives = $component->attributes()->directives()->getBladeConstructs()->all();
+
+        expect($directives)->toHaveCount(1);
+
+        $directive = $directives[0]->asDirective();
+        expect($directive)->toBeInstanceOf(DirectiveNode::class)
+            ->and($directive->nameText())->toBe('class')
+            ->and($directive->whitespaceBetweenNameAndArgs())->toBe('  ')
             ->and($doc->render())->toBe($blade);
     });
 });

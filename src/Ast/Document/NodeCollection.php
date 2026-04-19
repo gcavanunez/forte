@@ -26,29 +26,6 @@ use Illuminate\Support\LazyCollection;
 class NodeCollection extends Collection
 {
     /**
-     * Create a new NodeCollection instance.
-     *
-     * @template TMakeKey of array-key
-     * @template TMakeValue of Node
-     *
-     * @param  iterable<TMakeKey, TMakeValue>|LazyCollection<TMakeKey, TMakeValue>|null  $items
-     * @return static<TMakeKey, TMakeValue>
-     */
-    public static function make($items = []): static
-    {
-        if ($items instanceof LazyCollection) {
-            /** @var static<TMakeKey, TMakeValue> */
-            /** @phpstan-ignore new.static */
-            $result = new static($items->all());
-
-            return $result;
-        }
-
-        /** @var static<TMakeKey, TMakeValue> */
-        return parent::make($items);
-    }
-
-    /**
      * Filter the collection to nodes that are instances of the given class.
      *
      * @param  class-string  $className

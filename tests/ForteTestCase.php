@@ -39,26 +39,48 @@ class ForteTestCase extends TestCase
     {
         $basePath = sys_get_temp_dir().'/forte_testbench_'.getmypid();
 
-        $cacheDir = $basePath.'/bootstrap/cache';
+        self::ensureApplicationBasePath($basePath);
 
-        if (! is_dir($cacheDir)) {
-            mkdir($cacheDir, 0755, true);
-        }
+        return $basePath;
+    }
 
-        $storageDirs = [
+    private static function ensureApplicationBasePath(string $basePath): void
+    {
+        $directories = [
+            $basePath.'/app',
+            $basePath.'/bootstrap/cache',
+            $basePath.'/resources/views',
             $basePath.'/storage/app',
             $basePath.'/storage/framework/cache',
             $basePath.'/storage/framework/sessions',
             $basePath.'/storage/framework/views',
             $basePath.'/storage/logs',
         ];
-        foreach ($storageDirs as $dir) {
+
+        foreach ($directories as $dir) {
             if (! is_dir($dir)) {
                 mkdir($dir, 0755, true);
             }
         }
 
-        return $basePath;
+        $composerPath = $basePath.'/composer.json';
+
+        if (! is_file($composerPath)) {
+            file_put_contents($composerPath, self::applicationComposerJson(), LOCK_EX);
+        }
+    }
+
+    private static function applicationComposerJson(): string
+    {
+        return <<<'JSON'
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    }
+}
+JSON;
     }
 
     public function tokenize(string $template, ?Directives $directives = null)
