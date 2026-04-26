@@ -219,6 +219,7 @@ class DocumentBuilder
         $this->syntheticMeta[$newIndex] = [
             'tagName' => $spec->getTagName(),
             'attributes' => $spec->getAttributes(),
+            'rawAttributeSegments' => $spec->getRawAttributeSegments(),
             'selfClosing' => $spec->isSelfClosing(),
             'void' => $spec->isVoid(),
             'needsComposition' => true,
@@ -239,6 +240,7 @@ class DocumentBuilder
         $this->syntheticMeta[$nodeIndex] = array_merge($existing, [
             'tagName' => $spec->getTagName(),
             'attributes' => $spec->getAttributes(),
+            'rawAttributeSegments' => $spec->getRawAttributeSegments(),
             'selfClosing' => $spec->isSelfClosing(),
             'void' => $spec->isVoid(),
             'needsComposition' => true,
@@ -322,6 +324,7 @@ class DocumentBuilder
             return [
                 'tagName' => $spec->getTagName(),
                 'attributes' => $spec->getAttributes(),
+                'rawAttributeSegments' => $spec->getRawAttributeSegments(),
                 'selfClosing' => $spec->isSelfClosing(),
                 'void' => $spec->isVoid(),
             ];

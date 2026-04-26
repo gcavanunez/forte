@@ -128,20 +128,10 @@ trait RendersElements
     private function renderSyntheticElement(array $meta): string
     {
         $tagName = isset($meta['tagName']) && is_string($meta['tagName']) ? $meta['tagName'] : '';
-        /** @var list<array{0: string, 1: string|true}> $attributes */
-        $attributes = $meta['attributes'] ?? [];
         $selfClosing = (bool) ($meta['selfClosing'] ?? false);
         $void = (bool) ($meta['void'] ?? false);
 
-        $result = '<'.$tagName;
-
-        foreach ($attributes as [$name, $value]) {
-            if ($value === true) {
-                $result .= ' '.$name;
-            } else {
-                $result .= ' '.$name.'="'.$value.'"';
-            }
-        }
+        $result = '<'.$tagName.$this->renderSyntheticAttributeArea($meta);
 
         if ($selfClosing) {
             return $result.' />';
@@ -168,25 +158,44 @@ trait RendersElements
     private function renderSyntheticOpeningTag(array $meta): string
     {
         $tagName = isset($meta['tagName']) && is_string($meta['tagName']) ? $meta['tagName'] : '';
-        /** @var list<array{0: string, 1: string|true}> $attributes */
-        $attributes = $meta['attributes'] ?? [];
         $selfClosing = (bool) ($meta['selfClosing'] ?? false);
 
-        $result = '<'.$tagName;
-
-        foreach ($attributes as [$name, $value]) {
-            if ($value === true) {
-                $result .= ' '.$name;
-            } else {
-                $result .= ' '.$name.'="'.$value.'"';
-            }
-        }
+        $result = '<'.$tagName.$this->renderSyntheticAttributeArea($meta);
 
         if ($selfClosing) {
             return $result.' />';
         }
 
         return $result.'>';
+    }
+
+    /** @param  array<string, mixed>  $meta */
+    private function renderSyntheticAttributeArea(array $meta): string
+    {
+        /** @var list<array{0: string, 1: string|true}> $attributes */
+        $attributes = $meta['attributes'] ?? [];
+        /** @var array<int, list<string>> $rawSegments */
+        $rawSegments = $meta['rawAttributeSegments'] ?? [];
+
+        $result = '';
+
+        foreach ($rawSegments[-1] ?? [] as $raw) {
+            $result .= ' '.$raw;
+        }
+
+        foreach ($attributes as $index => [$name, $value]) {
+            if ($value === true) {
+                $result .= ' '.$name;
+            } else {
+                $result .= ' '.$name.'="'.$value.'"';
+            }
+
+            foreach ($rawSegments[$index] ?? [] as $raw) {
+                $result .= ' '.$raw;
+            }
+        }
+
+        return $result;
     }
 
     /**

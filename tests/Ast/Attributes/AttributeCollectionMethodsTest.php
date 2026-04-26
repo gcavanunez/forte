@@ -153,7 +153,7 @@ describe('Attributes Collection Methods', function (): void {
         it('rejects non-attribute values', function (): void {
             $attrs = $this->parseElement('<div class="foo"></div>')->attributes();
 
-            expect(fn () => $attrs[] = 'invalid')->toThrow(\InvalidArgumentException::class);
+            expect(fn () => $attrs[] = 'invalid')->toThrow(InvalidArgumentException::class);
         });
     });
 });

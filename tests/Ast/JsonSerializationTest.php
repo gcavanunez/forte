@@ -1,6 +1,8 @@
 <?php
 
 declare(strict_types=1);
+use Forte\Ast\DirectiveNode;
+use Forte\Ast\Node;
 
 describe('JSON Serialization', function (): void {
     describe('Base Node Properties', function (): void {
@@ -142,14 +144,14 @@ describe('JSON Serialization', function (): void {
             while ($stack !== []) {
                 $node = array_pop($stack);
 
-                if ($node instanceof \Forte\Ast\DirectiveNode) {
+                if ($node instanceof DirectiveNode) {
                     $directive = $node;
 
                     break;
                 }
 
                 foreach ($node->children() as $child) {
-                    if ($child instanceof \Forte\Ast\Node) {
+                    if ($child instanceof Node) {
                         $stack[] = $child;
                     }
                 }

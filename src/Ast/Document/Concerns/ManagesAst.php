@@ -192,7 +192,7 @@ trait ManagesAst
      *
      * @return array{type: int, start: int, end: int}
      *
-     * @throws OutOfBoundsExceptioN
+     * @throws OutOfBoundsException
      */
     public function getToken(int $index): array
     {
