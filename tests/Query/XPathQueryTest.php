@@ -10,6 +10,8 @@ use Forte\Ast\EchoNode;
 use Forte\Ast\Elements\ElementNode;
 use Forte\Ast\GenericNode;
 use Forte\Ast\Node;
+use Forte\Ast\PhpBlockNode;
+use Forte\Ast\VerbatimNode;
 use Forte\Components\ComponentManager;
 use Forte\Extensions\ExtensionRegistry;
 use Forte\Extensions\ForteExtension;
@@ -1210,7 +1212,7 @@ describe('XPath PHP and special blocks', function (): void {
         $results = $doc->xpath('//forte:php');
 
         expect($results)->toHaveCount(1)
-            ->and($results->first())->toBeInstanceOf(\Forte\Ast\PhpBlockNode::class);
+            ->and($results->first())->toBeInstanceOf(PhpBlockNode::class);
     });
 
     it('finds inline PHP tags (<?php ?>)', function (): void {
@@ -1238,7 +1240,7 @@ describe('XPath PHP and special blocks', function (): void {
         $results = $doc->xpath('//forte:verbatim');
 
         expect($results)->toHaveCount(1)
-            ->and($results->first())->toBeInstanceOf(\Forte\Ast\VerbatimNode::class);
+            ->and($results->first())->toBeInstanceOf(VerbatimNode::class);
     });
 
     it('finds Blade comments', function (): void {

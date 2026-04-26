@@ -38,4 +38,44 @@ describe('Element SetAttribute', function (): void {
         expect($result)->toContain('data-x="2"')
             ->and($result)->toContain('::style="raw"');
     });
+
+    it('preserves Blade {{ }} attribute spread when setting attribute', function (): void {
+        $doc = $this->parse('<div {{ $attributes->merge([\'class\' => "x"]) }}>content</div>');
+
+        $result = $doc->apply(new SetAttribute('div', 'data-id', 'new'))->render();
+
+        expect($result)->toContain('{{ $attributes->merge([\'class\' => "x"]) }}')
+            ->and($result)->toContain('data-id="new"');
+    });
+
+    it('preserves Blade {{ }} attribute spread alongside static attributes', function (): void {
+        $doc = $this->parse('<div class="anim" {{ $attributes }}>content</div>');
+
+        $result = $doc->apply(new SetAttribute('div', 'data-id', 'new'))->render();
+
+        expect($result)->toContain('class="anim"')
+            ->and($result)->toContain('{{ $attributes }}')
+            ->and($result)->toContain('data-id="new"');
+    });
+
+    it('preserves Blade {{ }} attribute spread across chained rewrites', function (): void {
+        $doc = $this->parse('<div {{ $attributes->merge([\'class\' => "x"]) }}>content</div>');
+
+        $result = $doc
+            ->apply(new SetAttribute('div', 'data-first', '1'))
+            ->apply(new SetAttribute('div', 'data-second', '2'))
+            ->render();
+
+        expect($result)->toContain('{{ $attributes->merge([\'class\' => "x"]) }}')
+            ->and($result)->toContain('data-first="1"')
+            ->and($result)->toContain('data-second="2"');
+    });
+
+    it('preserves multiple interleaved Blade constructs with attribute changes', function (): void {
+        $doc = $this->parse('<div {{ $a }} name="x" {{ $b }} disabled {{ $c }}>content</div>');
+
+        $result = $doc->apply(new SetAttribute('div', 'data-id', 'new'))->render();
+
+        expect($result)->toBe('<div {{ $a }} name="x" {{ $b }} disabled {{ $c }} data-id="new">content</div>');
+    });
 });

@@ -511,10 +511,16 @@ class Rewriter implements AstRewriter
         if ($isSynthetic) {
             /** @var list<array{0: string, 1: string|true}> $existing */
             $existing = $meta['attributes'];
+            /** @var array<int, list<string>> $rawSegments */
+            $rawSegments = $meta['rawAttributeSegments'] ?? [];
             $handledChanges = [];
             $seenNames = [];
 
-            foreach ($existing as [$name, $value]) {
+            foreach ($rawSegments[-1] ?? [] as $raw) {
+                $spec->appendRawAttributeSegment($raw);
+            }
+
+            foreach ($existing as $existingIndex => [$name, $value]) {
                 if (array_key_exists($name, $operation->attributeChanges)) {
                     $change = $operation->attributeChanges[$name];
 
@@ -533,6 +539,10 @@ class Rewriter implements AstRewriter
                 $seenNames[$name] = true;
 
                 $spec->appendAttr($name, $value);
+
+                foreach ($rawSegments[$existingIndex] ?? [] as $raw) {
+                    $spec->appendRawAttributeSegment($raw);
+                }
             }
 
             foreach ($operation->attributeChanges as $name => $value) {
@@ -545,6 +555,12 @@ class Rewriter implements AstRewriter
             $seenNames = [];
 
             foreach ($element->attributes() as $attr) {
+                if ($attr->isBladeConstruct()) {
+                    $spec->appendRawAttributeSegment($attr->render());
+
+                    continue;
+                }
+
                 $rawName = $attr->rawName();
 
                 if ($rawName === '') {

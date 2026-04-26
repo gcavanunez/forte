@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Forte\Ast\Elements\Attribute;
 use Forte\Ast\Elements\ElementNode;
 use Forte\Rewriting\Builders\Builder;
 use Forte\Rewriting\NodePath;
@@ -363,7 +364,7 @@ describe('Prepend/Append Children', function (): void {
 
                     // Build attribute array
                     $attrs = [];
-                    /** @var \Forte\Ast\Elements\Attribute $attr */
+                    /** @var Attribute $attr */
                     foreach ($elem->attributes() as $attr) {
                         $attrs[] = "'{$attr->nameText()}' => '{$attr->valueText()}'";
                     }

@@ -15,7 +15,6 @@ use Forte\Ast\Node;
 use Forte\Ast\PhpBlockNode;
 use Forte\Ast\TextNode;
 use Illuminate\Support\Collection;
-use Illuminate\Support\LazyCollection;
 
 /**
  * @template TKey of array-key

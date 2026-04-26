@@ -17,6 +17,13 @@ class ElementBuilder extends NodeBuilder implements WrapperBuilder
     /** @var array<NodeBuilder> */
     private array $children = [];
 
+    /**
+     * Raw segments keyed by the attribute index they trail (`-1` = before all attrs).
+     *
+     * @var array<int, list<string>>
+     */
+    private array $rawAttributeSegments = [];
+
     private bool $selfClosing = false;
 
     private bool $void = false;
@@ -68,6 +75,18 @@ class ElementBuilder extends NodeBuilder implements WrapperBuilder
     public function appendAttr(string $name, string|true $value): self
     {
         $this->attributes[] = [$name, $value];
+
+        return $this;
+    }
+
+    /**
+     * Append a raw attribute-area segment (e.g. `{{ $attrs }}`, `@if ... @endif`),
+     * positioned after the most recently appended attribute.
+     */
+    public function appendRawAttributeSegment(string $raw): self
+    {
+        $bucket = count($this->attributes) - 1;
+        $this->rawAttributeSegments[$bucket][] = $raw;
 
         return $this;
     }
@@ -177,15 +196,7 @@ class ElementBuilder extends NodeBuilder implements WrapperBuilder
 
     public function toSource(): string
     {
-        $output = '<'.$this->tagName;
-
-        foreach ($this->attributes as [$name, $value]) {
-            if ($value === true) {
-                $output .= ' '.$name;
-            } else {
-                $output .= ' '.$name.'="'.$value.'"';
-            }
-        }
+        $output = '<'.$this->tagName.$this->renderAttributeArea();
 
         foreach ($this->bladeAttributes as $name => $expression) {
             $output .= ' :'.$name.'="'.$expression.'"';
@@ -208,6 +219,29 @@ class ElementBuilder extends NodeBuilder implements WrapperBuilder
         return $output.('</'.$this->tagName.'>');
     }
 
+    private function renderAttributeArea(): string
+    {
+        $output = '';
+
+        foreach ($this->rawAttributeSegments[-1] ?? [] as $raw) {
+            $output .= ' '.$raw;
+        }
+
+        foreach ($this->attributes as $index => [$name, $value]) {
+            if ($value === true) {
+                $output .= ' '.$name;
+            } else {
+                $output .= ' '.$name.'="'.$value.'"';
+            }
+
+            foreach ($this->rawAttributeSegments[$index] ?? [] as $raw) {
+                $output .= ' '.$raw;
+            }
+        }
+
+        return $output;
+    }
+
     public function getTagName(): string
     {
         return $this->tagName;
@@ -219,6 +253,12 @@ class ElementBuilder extends NodeBuilder implements WrapperBuilder
     public function getAttributes(): array
     {
         return $this->attributes;
+    }
+
+    /** @return array<int, list<string>> */
+    public function getRawAttributeSegments(): array
+    {
+        return $this->rawAttributeSegments;
     }
 
     /**
@@ -250,16 +290,7 @@ class ElementBuilder extends NodeBuilder implements WrapperBuilder
      */
     public function getOpeningSource(): string
     {
-        $output = '<'.$this->tagName;
-
-        // Standard attributes
-        foreach ($this->attributes as [$name, $value]) {
-            if ($value === true) {
-                $output .= ' '.$name;
-            } else {
-                $output .= ' '.$name.'="'.$value.'"';
-            }
-        }
+        $output = '<'.$this->tagName.$this->renderAttributeArea();
 
         // Blade dynamic attributes
         foreach ($this->bladeAttributes as $name => $expression) {
